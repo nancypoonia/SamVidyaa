@@ -79,6 +79,26 @@ const validateObjectId = (value, field, errors, options = {}) => {
     }
 };
 
+const validateCourseIdentifier = (value, field, errors, options = {}) => {
+    const { required = false } = options;
+
+    if (!hasValue(value)) {
+        if (required) addError(errors, field, `${field} is required`);
+        return;
+    }
+
+    const normalized = String(value);
+    if (OBJECT_ID_PATTERN.test(normalized)) {
+        return;
+    }
+
+    if (normalized.startsWith('analytics:') && normalized.length > 'analytics:'.length && normalized.length <= 140) {
+        return;
+    }
+
+    addError(errors, field, `${field} must be a valid id`);
+};
+
 const validateString = (value, field, errors, options = {}) => {
     const {
         required = false,
@@ -305,11 +325,12 @@ const validateCourseCreateRequest = validateRequest((req, errors) => {
 });
 
 const validateCourseUpdateRequest = validateRequest((req, errors) => {
-    validateObjectId(req.params.id, 'id', errors, { required: true });
+    validateCourseIdentifier(req.params.id, 'id', errors, { required: true });
     validateString(req.body.course_code, 'course_code', errors, { maxLength: 30 });
     validateString(req.body.course_name, 'course_name', errors, { maxLength: 160 });
     validateString(req.body.subject, 'subject', errors, { maxLength: 120 });
     validateString(req.body.description, 'description', errors, { maxLength: 5000 });
+    validateString(req.body.instructor_name, 'instructor_name', errors, { maxLength: 160 });
     validateNumber(req.body.course_test_questions, 'course_test_questions', errors, { integer: true, min: 0 });
     validateNumber(req.body.points, 'points', errors, { integer: true, min: 0 });
     validateBoolean(req.body.is_active, 'is_active', errors);

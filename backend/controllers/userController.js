@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Course = require('../models/Course');
 const Reward = require('../models/Reward');
 const PointTransaction = require('../models/PointTransaction');
+const { countAnalyticsCoursesExcludingCodes } = require('../services/analyticsCourseService');
 const { createUserAccount, normalizeRole } = require('../services/userAccountService');
 
 // @desc    Get public platform stats for landing page
@@ -9,10 +10,14 @@ const { createUserAccount, normalizeRole } = require('../services/userAccountSer
 // @access  Public
 const getPublicPlatformStats = async (_req, res) => {
     try {
-        const [totalUsers, totalCourses] = await Promise.all([
+        const [totalUsers, appCourseStats] = await Promise.all([
             User.countDocuments(),
-            Course.countDocuments(),
+            Course.find().select('course_code').lean(),
         ]);
+        const analyticsCourseCount = await countAnalyticsCoursesExcludingCodes(
+            appCourseStats.map((course) => course.course_code)
+        );
+        const totalCourses = appCourseStats.length + analyticsCourseCount;
 
         res.json({ totalUsers, totalCourses });
     } catch (error) {

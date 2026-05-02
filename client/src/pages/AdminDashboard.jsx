@@ -10,7 +10,7 @@ import {
   HiStar,
   HiUsers
 } from 'react-icons/hi2'
-import { FiDownload, FiMoon, FiSun, FiTrash2, FiUpload } from 'react-icons/fi'
+import { FiMoon, FiSun } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useI18n } from '../context/I18nContext'
@@ -20,6 +20,8 @@ import {
   useDelayedLoading
 } from '../components/ui/Skeleton'
 import AdminDashboardWorkspace from '../components/dashboard/admin/AdminDashboardWorkspace'
+import CreateModuleForm from '../components/CreateModuleForm'
+import CreateTaskForm from '../components/CreateTaskForm'
 import { applyAnnouncementEvent, normalizeAnnouncementList, subscribeToAnnouncementStream } from '../utils/announcementRealtime'
 import {
   ANNOUNCEMENT_TIMER_PRESETS,
@@ -38,6 +40,18 @@ const getInitials = (name = '') => name
   .join('') || 'AD'
 
 const ADMIN_DASHBOARD_STATE_KEY = 'admin_dashboard_state'
+const DEFAULT_COURSE_FORM = {
+  id: null,
+  course_code: '',
+  course_name: '',
+  subject: '',
+  description: '',
+  instructor_name: '',
+  course_test_questions: '5',
+  points: '1000',
+  is_active: true,
+  is_analytics_course: false,
+}
 
 function AdminDashboard() {
   const { theme, toggleTheme, isDark } = useTheme()
@@ -82,6 +96,19 @@ function AdminDashboard() {
   const [savingTestimonial, setSavingTestimonial] = React.useState(false)
   const [deletingTestimonialId, setDeletingTestimonialId] = React.useState(null)
   const [courses, setCourses] = React.useState([])
+  const [courseForm, setCourseForm] = React.useState(DEFAULT_COURSE_FORM)
+  const [courseMessage, setCourseMessage] = React.useState('')
+  const [savingCourseId, setSavingCourseId] = React.useState(null)
+  const [builderCourse, setBuilderCourse] = React.useState(null)
+  const [builderModules, setBuilderModules] = React.useState([])
+  const [builderTasks, setBuilderTasks] = React.useState([])
+  const [builderSelectedModule, setBuilderSelectedModule] = React.useState(null)
+  const [builderLoadingModules, setBuilderLoadingModules] = React.useState(false)
+  const [builderLoadingTasks, setBuilderLoadingTasks] = React.useState(false)
+  const [showBuilderModuleForm, setShowBuilderModuleForm] = React.useState(false)
+  const [editingBuilderModule, setEditingBuilderModule] = React.useState(null)
+  const [showBuilderTaskForm, setShowBuilderTaskForm] = React.useState(false)
+  const [editingBuilderTask, setEditingBuilderTask] = React.useState(null)
   const [privilegedUserForm, setPrivilegedUserForm] = React.useState({
     name: '',
     email: '',
@@ -334,6 +361,11 @@ function AdminDashboard() {
     setPrivilegedUserMessage('')
   }
 
+  const resetCourseForm = () => {
+    setCourseForm(DEFAULT_COURSE_FORM)
+    setCourseMessage('')
+  }
+
   const handleInstallerSelection = (event) => {
     const file = event.target.files?.[0] || null
     setSelectedInstaller(file)
@@ -343,6 +375,294 @@ function AdminDashboard() {
   const handlePrivilegedUserFieldChange = (field, value) => {
     setPrivilegedUserForm((prev) => ({ ...prev, [field]: value }))
     setPrivilegedUserMessage('')
+  }
+
+  const handleCourseFieldChange = (field, value) => {
+    setCourseForm((prev) => ({ ...prev, [field]: value }))
+    setCourseMessage('')
+  }
+
+  const handleEditCourse = (course) => {
+    if (!course?._id) {
+      return
+    }
+
+    setCourseForm({
+      id: course._id,
+      course_code: course.course_code || '',
+      course_name: course.course_name || '',
+      subject: course.subject || '',
+      description: course.description || '',
+      instructor_name: typeof course.instructor === 'object' ? course.instructor?.name || '' : '',
+      course_test_questions: String(course.course_test_questions ?? ''),
+      points: String(course.points ?? ''),
+      is_active: course.is_active !== false,
+      is_analytics_course: Boolean(course.is_analytics_course),
+    })
+    setCourseMessage('')
+    setActiveTab('courses')
+  }
+
+  const handleStartCourseCreate = () => {
+    setCourseForm(DEFAULT_COURSE_FORM)
+    setCourseMessage('')
+    setActiveTab('courses')
+  }
+
+  const fetchBuilderModules = React.useCallback(async (courseId) => {
+    if (!user?.token || !courseId) return
+
+    setBuilderLoadingModules(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/modules?course_id=${courseId}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+
+      if (!response.ok) {
+        throw new Error('modules_fetch_failed')
+      }
+
+      const data = await response.json()
+      const modules = Array.isArray(data) ? data : []
+      setBuilderModules(modules)
+      setBuilderSelectedModule((prev) => {
+        if (!prev) return null
+        return modules.find((module) => module._id === prev._id) || null
+      })
+    } catch (error) {
+      console.error('Failed to fetch admin course modules', error)
+      setBuilderModules([])
+    } finally {
+      setBuilderLoadingModules(false)
+    }
+  }, [user?.token])
+
+  const fetchBuilderTasks = React.useCallback(async (moduleId) => {
+    if (!user?.token || !moduleId) return
+
+    setBuilderLoadingTasks(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tasks?module_id=${moduleId}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+
+      if (!response.ok) {
+        throw new Error('tasks_fetch_failed')
+      }
+
+      const data = await response.json()
+      setBuilderTasks(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Failed to fetch admin module tasks', error)
+      setBuilderTasks([])
+    } finally {
+      setBuilderLoadingTasks(false)
+    }
+  }, [user?.token])
+
+  const handleOpenCourseBuilder = (course) => {
+    if (!course?._id || course.is_analytics_course) {
+      return
+    }
+
+    setBuilderCourse(course)
+    setBuilderSelectedModule(null)
+    setBuilderTasks([])
+    fetchBuilderModules(course._id)
+    setActiveTab('courses')
+  }
+
+  const handleCloseCourseBuilder = () => {
+    setBuilderCourse(null)
+    setBuilderModules([])
+    setBuilderSelectedModule(null)
+    setBuilderTasks([])
+    setEditingBuilderModule(null)
+    setEditingBuilderTask(null)
+    setShowBuilderModuleForm(false)
+    setShowBuilderTaskForm(false)
+  }
+
+  const handleBuilderModuleSelect = (module) => {
+    setBuilderSelectedModule(module)
+    fetchBuilderTasks(module._id)
+  }
+
+  const openBuilderModuleForm = (module = null) => {
+    if (!builderCourse) return
+    setEditingBuilderModule(module)
+    setShowBuilderModuleForm(true)
+  }
+
+  const handleBuilderModuleSaved = (moduleData, isEditing = false) => {
+    if (isEditing) {
+      setBuilderModules((prev) => prev.map((module) => module._id === moduleData._id ? { ...module, ...moduleData } : module))
+      setBuilderSelectedModule((prev) => prev && prev._id === moduleData._id ? { ...prev, ...moduleData } : prev)
+      setEditingBuilderModule(null)
+      return
+    }
+
+    setBuilderModules((prev) => [...prev, moduleData])
+    setBuilderCourse((prev) => prev ? { ...prev, modules_count: (prev.modules_count || 0) + 1 } : prev)
+    setCourses((prev) => prev.map((course) => course._id === builderCourse?._id ? {
+      ...course,
+      modules_count: (course.modules_count || 0) + 1,
+    } : course))
+  }
+
+  const openBuilderTaskForm = (task = null) => {
+    if (!builderSelectedModule) return
+    setEditingBuilderTask(task)
+    setShowBuilderTaskForm(true)
+  }
+
+  const handleBuilderTaskSaved = (taskData, isEditing = false) => {
+    if (isEditing) {
+      setBuilderTasks((prev) => prev.map((task) => task._id === taskData._id ? taskData : task))
+      setEditingBuilderTask(null)
+      return
+    }
+
+    setBuilderTasks((prev) => [...prev, taskData])
+    setBuilderModules((prev) => prev.map((module) => module._id === taskData.module_id ? {
+      ...module,
+      task_count: (module.task_count || module.total_tasks || 0) + 1,
+      total_tasks: (module.total_tasks || module.task_count || 0) + 1,
+    } : module))
+  }
+
+  const handleBuilderDeleteModule = async (moduleId) => {
+    if (!user?.token || !moduleId || !window.confirm(t.courseManagement.deleteModuleConfirm)) return
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/modules/${moduleId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+
+      if (!response.ok) {
+        throw new Error('module_delete_failed')
+      }
+
+      setBuilderModules((prev) => prev.filter((module) => module._id !== moduleId))
+      setBuilderCourse((prev) => prev ? { ...prev, modules_count: Math.max(0, (prev.modules_count || 0) - 1) } : prev)
+      setCourses((prev) => prev.map((course) => course._id === builderCourse?._id ? {
+        ...course,
+        modules_count: Math.max(0, (course.modules_count || 0) - 1),
+      } : course))
+      if (builderSelectedModule?._id === moduleId) {
+        setBuilderSelectedModule(null)
+        setBuilderTasks([])
+      }
+    } catch (error) {
+      console.error('Failed to delete admin module', error)
+      setCourseMessage(t.courseManagement.deleteModuleFailed)
+    }
+  }
+
+  const handleBuilderDeleteTask = async (taskId) => {
+    if (!user?.token || !taskId || !window.confirm(t.courseManagement.deleteTaskConfirm)) return
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+
+      if (!response.ok) {
+        throw new Error('task_delete_failed')
+      }
+
+      setBuilderTasks((prev) => prev.filter((task) => task._id !== taskId))
+      setBuilderModules((prev) => prev.map((module) => module._id === builderSelectedModule?._id ? {
+        ...module,
+        task_count: Math.max(0, (module.task_count || module.total_tasks || 0) - 1),
+        total_tasks: Math.max(0, (module.total_tasks || module.task_count || 0) - 1),
+      } : module))
+    } catch (error) {
+      console.error('Failed to delete admin task', error)
+      setCourseMessage(t.courseManagement.deleteTaskFailed)
+    }
+  }
+
+  const handleSaveCourse = async () => {
+    if (!user?.token || !courseForm.course_code.trim() || !courseForm.course_name.trim() || !courseForm.subject.trim()) {
+      return
+    }
+
+    setSavingCourseId(courseForm.id || 'new')
+    setCourseMessage('')
+
+    try {
+      const isEditing = Boolean(courseForm.id)
+      const isAnalyticsCourse = Boolean(isEditing && courseForm.is_analytics_course)
+      const payload = {
+        course_code: courseForm.course_code.trim().toUpperCase(),
+        course_name: courseForm.course_name.trim(),
+        subject: courseForm.subject.trim(),
+        description: courseForm.description.trim(),
+        course_test_questions: Number(courseForm.course_test_questions) || 0,
+        points: Number(courseForm.points) || 0,
+        is_active: Boolean(courseForm.is_active),
+      }
+
+      if (isAnalyticsCourse) {
+        payload.instructor_name = courseForm.instructor_name.trim()
+        delete payload.description
+        delete payload.course_test_questions
+        delete payload.points
+        delete payload.is_active
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/courses${isEditing ? `/${courseForm.id}` : ''}`, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || 'course_update_failed')
+      }
+
+      if (isEditing) {
+        setCourses((prev) => prev.map((course) => {
+          if (course._id !== data._id) {
+            return course
+          }
+
+          return {
+            ...course,
+            ...data,
+            instructor: typeof data.instructor === 'object' && data.instructor !== null ? data.instructor : course.instructor,
+            modules_count: course.modules_count,
+          }
+        }))
+      } else {
+        setCourses((prev) => [{
+          ...data,
+          instructor: typeof data.instructor === 'object' && data.instructor !== null
+            ? data.instructor
+            : { name: user.name, email: user.email },
+          modules_count: 0,
+        }, ...prev])
+        setPlatformStats((prev) => ({
+          ...prev,
+          totalCourses: Number(prev.totalCourses || 0) + 1,
+        }))
+      }
+
+      resetCourseForm()
+      setCourseMessage(isEditing ? t.courseManagement.updated : t.courseManagement.created)
+    } catch (error) {
+      console.error('Course update failed', error)
+      setCourseMessage(error.message || t.courseManagement.updateFailed)
+    } finally {
+      setSavingCourseId(null)
+    }
   }
 
   const handleCreatePrivilegedUser = async () => {
@@ -717,6 +1037,8 @@ function AdminDashboard() {
   const recentTestimonials = testimonials.slice(0, 3)
   const latestAnnouncement = announcements[0] || null
   const latestTestimonial = testimonials[0] || null
+  const liveCourseCount = Math.max(Number(platformStats.totalCourses) || 0, courses.length)
+  const liveCourseStatValue = platformStatsLoading && courses.length === 0 ? '...' : liveCourseCount
   const topbarTitle = activeTab === 'overview'
     ? translate('dashboard.admin.topbar.welcomeBack', { name: user?.name || translations.auth.roles.admin })
     : t.tabs[activeTab]
@@ -731,7 +1053,7 @@ function AdminDashboard() {
       id: 'courses',
       icon: <HiBookOpen />,
       label: t.stats.liveCourses,
-      value: platformStatsLoading ? '...' : platformStats.totalCourses,
+      value: liveCourseStatValue,
     },
     {
       id: 'announcements',
@@ -767,83 +1089,6 @@ function AdminDashboard() {
     }
   ]
 
-  const renderTopbarAction = () => {
-    if (activeTab === 'overview') {
-      return (
-        <button className="btn btn-primary topbar-create-button" onClick={() => setActiveTab('announcements')}>
-          <span className="topbar-create-button__icon">
-            <HiBellAlert />
-          </span>
-          <span className="topbar-create-button__label">{t.overview.primaryAction}</span>
-        </button>
-      )
-    }
-
-    if (activeTab === 'announcements') {
-      const isDisabled = savingAnnouncement
-        || !announcementForm.title.trim()
-        || !announcementForm.message.trim()
-        || (announcementForm.audienceType === 'COURSE' && !announcementForm.courseId)
-        || !isAnnouncementTimerReady
-
-      return (
-        <button className="btn btn-primary topbar-create-button" onClick={handleCreateAnnouncement} disabled={isDisabled}>
-          <span className="topbar-create-button__icon">
-            <HiBellAlert />
-          </span>
-          <span className="topbar-create-button__label">
-            {savingAnnouncement ? t.announcements.creating : t.announcements.create}
-          </span>
-        </button>
-      )
-    }
-
-    if (activeTab === 'users') {
-      const isDisabled = savingPrivilegedUser
-        || !privilegedUserForm.name.trim()
-        || !privilegedUserForm.email.trim()
-        || !privilegedUserForm.password.trim()
-
-      return (
-        <button className="btn btn-primary topbar-create-button" onClick={handleCreatePrivilegedUser} disabled={isDisabled}>
-          <span className="topbar-create-button__icon">
-            <HiUsers />
-          </span>
-          <span className="topbar-create-button__label">{t.userManagement.createAction}</span>
-        </button>
-      )
-    }
-
-    if (activeTab === 'testimonials') {
-      const isDisabled = savingTestimonial
-        || !testimonialForm.name.trim()
-        || !testimonialForm.role.trim()
-        || !testimonialForm.quote.trim()
-
-      return (
-        <button className="btn btn-primary topbar-create-button" onClick={handleSaveTestimonial} disabled={isDisabled}>
-          <span className="topbar-create-button__icon">
-            <HiSparkles />
-          </span>
-          <span className="topbar-create-button__label">
-            {testimonialForm.id ? t.testimonials.update : t.testimonials.add}
-          </span>
-        </button>
-      )
-    }
-
-    return (
-      <button className="btn btn-primary topbar-create-button" onClick={handleDesktopAppUpload} disabled={!selectedInstaller || uploadingDesktopApp}>
-        <span className="topbar-create-button__icon">
-          <FiUpload />
-        </span>
-        <span className="topbar-create-button__label">
-          {uploadingDesktopApp ? t.desktopApp.uploading : t.desktopApp.upload}
-        </span>
-      </button>
-    )
-  }
-
   const adminWorkspaceProps = {
     activeTab,
     setActiveTab,
@@ -857,12 +1102,34 @@ function AdminDashboard() {
     testimonials,
     platformStatsLoading,
     platformStats,
+    liveCourseStatValue,
     statsCards,
     globalAnnouncementCount,
     courseAnnouncementCount,
     latestAnnouncement,
     latestTestimonial,
     courses,
+    courseForm,
+    courseMessage,
+    savingCourseId,
+    handleEditCourse,
+    handleStartCourseCreate,
+    handleOpenCourseBuilder,
+    handleCloseCourseBuilder,
+    handleCourseFieldChange,
+    handleSaveCourse,
+    resetCourseForm,
+    builderCourse,
+    builderModules,
+    builderTasks,
+    builderSelectedModule,
+    builderLoadingModules,
+    builderLoadingTasks,
+    openBuilderModuleForm,
+    handleBuilderModuleSelect,
+    handleBuilderDeleteModule,
+    openBuilderTaskForm,
+    handleBuilderDeleteTask,
     recentAnnouncements,
     announcementDateFormatter,
     showDesktopAppSkeleton,
@@ -927,6 +1194,9 @@ function AdminDashboard() {
           <button className={`sidebar-link ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
             <HiUsers className="sidebar-icon" /> {t.tabs.users}
           </button>
+          <button className={`sidebar-link ${activeTab === 'courses' ? 'active' : ''}`} onClick={() => setActiveTab('courses')}>
+            <HiBookOpen className="sidebar-icon" /> {t.tabs.courses}
+          </button>
           <button className={`sidebar-link ${activeTab === 'announcements' ? 'active' : ''}`} onClick={() => setActiveTab('announcements')}>
             <HiBellAlert className="sidebar-icon" /> {t.tabs.announcements}
           </button>
@@ -958,7 +1228,6 @@ function AdminDashboard() {
         <header className="dashboard-topbar">
           <div className="topbar-left">
             <h2 className="topbar-title">{topbarTitle}</h2>
-            {renderTopbarAction()}
           </div>
 
           <div className="topbar-right">
@@ -985,6 +1254,24 @@ function AdminDashboard() {
 
         <AdminDashboardWorkspace {...adminWorkspaceProps} />
       </main>
+
+      {showBuilderModuleForm && builderCourse ? (
+        <CreateModuleForm
+          onClose={() => { setShowBuilderModuleForm(false); setEditingBuilderModule(null) }}
+          onModuleSaved={handleBuilderModuleSaved}
+          courseId={builderCourse._id}
+          initialData={editingBuilderModule}
+        />
+      ) : null}
+
+      {showBuilderTaskForm && builderSelectedModule ? (
+        <CreateTaskForm
+          onClose={() => { setShowBuilderTaskForm(false); setEditingBuilderTask(null) }}
+          onTaskCreated={handleBuilderTaskSaved}
+          moduleId={builderSelectedModule._id}
+          initialData={editingBuilderTask}
+        />
+      ) : null}
     </div>
   )
 }

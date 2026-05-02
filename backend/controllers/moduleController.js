@@ -203,7 +203,7 @@ const updateModule = async (req, res) => {
 const getTeacherModules = async (req, res) => {
     try {
         const { course_id } = req.query;
-        let query = { createdBy: req.user._id };
+        let query = isAdminRole(req.user.role) ? {} : { createdBy: req.user._id };
         const pagination = parsePagination(req, { defaultLimit: 100, maxLimit: 200 });
 
         if (course_id) {

@@ -3,8 +3,12 @@ import { motion } from 'framer-motion'
 import {
   HiBellAlert,
   HiBookOpen,
+  HiFolderPlus,
+  HiListBullet,
+  HiPencilSquare,
   HiSparkles,
   HiStar,
+  HiTrash,
   HiUsers,
 } from 'react-icons/hi2'
 import { FiDownload, FiTrash2, FiUpload } from 'react-icons/fi'
@@ -30,12 +34,34 @@ function AdminDashboardWorkspace({
   testimonials,
   platformStatsLoading,
   platformStats,
+  liveCourseStatValue,
   statsCards,
   globalAnnouncementCount,
   courseAnnouncementCount,
   latestAnnouncement,
   latestTestimonial,
   courses,
+  courseForm,
+  courseMessage,
+  savingCourseId,
+  handleEditCourse,
+  handleStartCourseCreate,
+  handleOpenCourseBuilder,
+  handleCloseCourseBuilder,
+  handleCourseFieldChange,
+  handleSaveCourse,
+  resetCourseForm,
+  builderCourse,
+  builderModules,
+  builderTasks,
+  builderSelectedModule,
+  builderLoadingModules,
+  builderLoadingTasks,
+  openBuilderModuleForm,
+  handleBuilderModuleSelect,
+  handleBuilderDeleteModule,
+  openBuilderTaskForm,
+  handleBuilderDeleteTask,
   recentAnnouncements,
   announcementDateFormatter,
   showDesktopAppSkeleton,
@@ -85,6 +111,9 @@ function AdminDashboardWorkspace({
   handleDesktopAppRemove,
   removingDesktopApp,
 }) {
+  const isEditingAnalyticsCourse = Boolean(courseForm?.is_analytics_course)
+  const activeCourseSaveId = courseForm?.id || 'new'
+
   return (
     <div className="dashboard-workspace">
       {activeTab === 'overview' && (
@@ -116,15 +145,15 @@ function AdminDashboardWorkspace({
             <button type="button" className="btn btn-primary" onClick={() => setActiveTab('announcements')}>
               <HiBellAlert /> {t.overview.primaryAction}
             </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setActiveTab('courses')}>
+              <HiBookOpen /> {t.tabs.courses}
+            </button>
             <button type="button" className="btn btn-secondary" onClick={() => setActiveTab('desktop')}>
               <FiUpload /> {t.overview.secondaryAction}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setActiveTab('users')}>
-              <HiUsers /> {t.userManagement.primaryAction}
-            </button>
           </div>
 
-          <div className="stats-grid">
+          <div className="stats-grid admin-stats-grid">
             {statsCards.map((card) => (
               <motion.div key={card.id} className="stat-card" whileHover={{ y: -4 }}>
                 <div className="stat-icon">{card.icon}</div>
@@ -136,90 +165,7 @@ function AdminDashboardWorkspace({
             ))}
           </div>
 
-          <section className="dashboard-performance-section">
-            <div className="workspace-panel-header dashboard-performance-section__header">
-              <div>
-                <h3>{t.overview.operationsTitle}</h3>
-                <p>{t.overview.quickLinksDescription}</p>
-              </div>
-            </div>
-
-            <div className="course-analytics-highlights analytics-highlights--dashboard">
-              <div className="course-analytics-highlight course-analytics-highlight--hero">
-                <span className="course-analytics-highlight__label">{t.desktopApp.title}</span>
-                <strong>{desktopApp ? t.overview.releaseReady : t.overview.releaseMissing}</strong>
-                <p>
-                  {desktopApp
-                    ? translate('dashboard.admin.desktopApp.currentFile', { name: desktopApp.filename })
-                    : t.desktopApp.noFile}
-                </p>
-              </div>
-
-              <div className="course-analytics-highlight course-analytics-highlight--hero">
-                <span className="course-analytics-highlight__label">{t.announcements.title}</span>
-                <strong>
-                  {announcements.length
-                    ? translate('dashboard.admin.overview.updatesReady', { count: announcements.length })
-                    : t.overview.updatesMissing}
-                </strong>
-                <p>{`${t.announcements.generalAudience}: ${globalAnnouncementCount} • ${t.announcements.courseAudience}: ${courseAnnouncementCount}`}</p>
-              </div>
-
-              <div className="course-analytics-highlight course-analytics-highlight--hero course-analytics-highlight--warning">
-                <span className="course-analytics-highlight__label">{t.testimonials.title}</span>
-                <strong>
-                  {testimonials.length
-                    ? translate('dashboard.admin.overview.proofReady', { count: testimonials.length })
-                    : t.overview.proofMissing}
-                </strong>
-                <p>{latestTestimonial?.role || t.testimonials.noTestimonials}</p>
-              </div>
-            </div>
-
-            <div className="course-analytics-overview">
-              <div className="course-analytics-stat">
-                <div className="course-analytics-stat__icon">
-                  <HiUsers />
-                </div>
-                <div>
-                  <span>{t.stats.totalUsers}</span>
-                  <strong>{platformStatsLoading ? '...' : platformStats.totalUsers}</strong>
-                </div>
-              </div>
-
-              <div className="course-analytics-stat">
-                <div className="course-analytics-stat__icon">
-                  <HiBookOpen />
-                </div>
-                <div>
-                  <span>{t.stats.liveCourses}</span>
-                  <strong>{platformStatsLoading ? '...' : platformStats.totalCourses}</strong>
-                </div>
-              </div>
-
-              <div className="course-analytics-stat">
-                <div className="course-analytics-stat__icon">
-                  <HiBellAlert />
-                </div>
-                <div>
-                  <span>{t.announcements.generalAudience}</span>
-                  <strong>{globalAnnouncementCount}</strong>
-                </div>
-              </div>
-
-              <div className="course-analytics-stat">
-                <div className="course-analytics-stat__icon">
-                  <HiStar />
-                </div>
-                <div>
-                  <span>{translate('landingDownload.downloadsLabel')}</span>
-                  <strong>{desktopApp?.download_count || 0}</strong>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <div className="admin-overview-grid">
+          <div className="admin-overview-grid admin-overview-grid--compact">
             <section className="admin-overview-card">
               <div className="workspace-panel-header admin-card-header">
                 <div>
@@ -300,6 +246,13 @@ function AdminDashboardWorkspace({
               </div>
 
               <div className="admin-quick-links">
+                <button type="button" className="admin-quick-link" onClick={() => setActiveTab('courses')}>
+                  <HiBookOpen />
+                  <div>
+                    <strong>{t.tabs.courses}</strong>
+                    <span>{t.courseManagement.description}</span>
+                  </div>
+                </button>
                 <button type="button" className="admin-quick-link" onClick={() => setActiveTab('announcements')}>
                   <HiBellAlert />
                   <div>
@@ -321,105 +274,9 @@ function AdminDashboardWorkspace({
                     <span>{t.testimonials.description}</span>
                   </div>
                 </button>
-                <button type="button" className="admin-quick-link" onClick={() => setActiveTab('desktop')}>
-                  <FiUpload />
-                  <div>
-                    <strong>{t.tabs.desktop}</strong>
-                    <span>{t.desktopApp.description}</span>
-                  </div>
-                </button>
               </div>
             </section>
           </div>
-
-          <div className="admin-overview-grid admin-overview-grid--secondary">
-            <section className="admin-overview-card">
-              <div className="workspace-panel-header admin-card-header">
-                <div>
-                  <span className="admin-copy-badge">{t.announcements.title}</span>
-                  <h3>{t.overview.latestAnnouncements}</h3>
-                </div>
-              </div>
-
-              {announcementsLoading ? (
-                <p className="empty-state">{common.loading}</p>
-              ) : recentAnnouncements.length ? (
-                <div className="dashboard-announcements-feed admin-overview-feed">
-                  {recentAnnouncements.map((announcement) => (
-                    <article key={announcement._id} className="dashboard-announcement-item">
-                      <div className="dashboard-announcement-item__meta">
-                        <div>
-                          <h4>{announcement.title}</h4>
-                          <p>
-                            {announcement.audience_type === 'GLOBAL'
-                              ? t.announcements.generalAudience
-                              : announcement.course_id?.course_name || t.announcements.courseAudience}
-                            {' • '}
-                            {formatDate(announcement.createdAt, announcementDateFormatter)}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="dashboard-announcement-item__body">{announcement.message}</p>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-state">{t.overview.noAnnouncements}</p>
-              )}
-            </section>
-
-            <section className="admin-overview-card">
-              <div className="workspace-panel-header admin-card-header">
-                <div>
-                  <span className="admin-copy-badge">{t.testimonials.title}</span>
-                  <h3>{t.overview.latestTestimonials}</h3>
-                </div>
-              </div>
-
-              {testimonialsLoading ? (
-                <PanelStatusSkeleton visible={showTestimonialStatus} />
-              ) : recentTestimonials.length ? (
-                <div className="admin-testimonials-list admin-testimonials-list--compact">
-                  {recentTestimonials.map((testimonial) => (
-                    <article key={testimonial._id} className="admin-testimonial-item">
-                      <div className="admin-testimonial-item__header">
-                        {testimonial.image_path ? (
-                          <img
-                            className="admin-testimonial-item__avatar"
-                            src={getUploadUrl(testimonial.image_path)}
-                            alt={testimonial.name}
-                          />
-                        ) : (
-                          <div className="admin-testimonial-item__avatar admin-testimonial-item__avatar--placeholder">
-                            {testimonial.name?.charAt(0)?.toUpperCase() || 'I'}
-                          </div>
-                        )}
-                        <div className="admin-testimonial-item__meta">
-                          <strong>{testimonial.name}</strong>
-                          <span>{testimonial.role}</span>
-                        </div>
-                      </div>
-                      <p className="admin-testimonial-item__quote">{testimonial.quote}</p>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-state">{t.overview.noTestimonials}</p>
-              )}
-            </section>
-          </div>
-
-          <section className="recent-activity">
-            <h3>{t.activity.title}</h3>
-            <div className="activity-list">
-              {activityItems.map((item) => (
-                <div key={`${item.time}-${item.text}`} className="activity-item">
-                  <span className="activity-time">{item.time}</span>
-                  <span className="activity-text">{item.text}</span>
-                </div>
-              ))}
-            </div>
-          </section>
         </motion.div>
       )}
 
@@ -444,9 +301,14 @@ function AdminDashboardWorkspace({
             </div>
           </div>
 
-          <div className="admin-management-layout">
-            <section className="admin-form-card">
-              <p className="admin-form-card__intro">{t.userManagement.description}</p>
+          <div className="admin-staff-layout">
+            <section className="admin-form-card admin-staff-form">
+              <div className="admin-course-panel-heading">
+                <span>{t.userManagement.primaryAction}</span>
+                <strong>{t.userManagement.allowedRolesValue}</strong>
+              </div>
+
+              <div className="admin-staff-form__grid">
               <label className="admin-installer-panel__label">
                 {t.userManagement.nameLabel}
                 <input
@@ -502,6 +364,7 @@ function AdminDashboardWorkspace({
                   onChange={(event) => handlePrivilegedUserFieldChange('institution', event.target.value)}
                 />
               </label>
+              </div>
 
               <div className="admin-installer-panel__actions">
                 <button type="button" className="btn btn-primary" onClick={handleCreatePrivilegedUser}>
@@ -517,46 +380,338 @@ function AdminDashboardWorkspace({
               ) : null}
             </section>
 
-            <section className="admin-overview-card">
-              <div className="workspace-panel-header admin-card-header">
-                <div>
-                  <span className="admin-copy-badge">{t.userManagement.securityBadge}</span>
-                  <h3>{t.userManagement.securityTitle}</h3>
-                  <p>{t.userManagement.securityDescription}</p>
-                </div>
+            <section className="admin-staff-policy">
+              <div className="admin-course-panel-heading">
+                <span>{t.userManagement.securityBadge}</span>
+                <strong>{t.userManagement.securityTitle}</strong>
               </div>
+              <p>{t.userManagement.securityDescription}</p>
 
-              <div className="course-analytics-highlights">
-                <div className="course-analytics-highlight">
-                  <span className="course-analytics-highlight__label">{t.userManagement.publicSignupLabel}</span>
+              <div className="admin-staff-policy__list">
+                <article>
+                  <span>{t.userManagement.publicSignupLabel}</span>
                   <strong>{translations.auth.roles.student}</strong>
                   <p>{t.userManagement.publicSignupDescription}</p>
-                </div>
-                <div className="course-analytics-highlight">
-                  <span className="course-analytics-highlight__label">{t.userManagement.allowedRolesLabel}</span>
+                </article>
+                <article>
+                  <span>{t.userManagement.allowedRolesLabel}</span>
                   <strong>{t.userManagement.allowedRolesValue}</strong>
                   <p>{t.userManagement.allowedRolesDescription}</p>
-                </div>
-              </div>
-
-              <div className="admin-quick-links">
-                <div className="admin-quick-link admin-quick-link--static">
-                  <HiUsers />
-                  <div>
-                    <strong>{t.userManagement.publicSignupLabel}</strong>
-                    <span>{t.userManagement.publicSignupDescription}</span>
-                  </div>
-                </div>
-                <div className="admin-quick-link admin-quick-link--static">
-                  <HiUsers />
-                  <div>
-                    <strong>{t.userManagement.allowedRolesLabel}</strong>
-                    <span>{t.userManagement.allowedRolesDescription}</span>
-                  </div>
-                </div>
+                </article>
               </div>
             </section>
           </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'courses' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`workspace-panel admin-courses-workspace ${builderCourse ? 'admin-courses-workspace--builder' : ''}`}
+        >
+          <div className="workspace-panel-header workspace-panel-header--stacked admin-courses-header">
+            <div className="workspace-panel-header__copy">
+              <span className="workspace-panel-header__eyebrow">
+                {builderCourse ? t.courseManagement.builderEyebrow : t.tabs.courses}
+              </span>
+              <h3>{builderCourse ? builderCourse.course_name : t.courseManagement.title}</h3>
+              <p className="workspace-panel-subtitle">
+                {builderCourse
+                  ? `${builderCourse.course_code} • ${builderCourse.subject || common.general}`
+                  : t.courseManagement.description}
+              </p>
+            </div>
+
+            {builderCourse ? (
+              <div className="admin-course-header-actions">
+                <button type="button" className="btn btn-primary" onClick={() => openBuilderModuleForm()}>
+                  <HiFolderPlus /> {t.courseManagement.addModule}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={handleCloseCourseBuilder}>
+                  {common.close}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="dashboard-inline-metrics">
+                  <article className="dashboard-inline-metric">
+                    <span>{t.stats.liveCourses}</span>
+                    <strong>{courses.length}</strong>
+                  </article>
+                  <article className="dashboard-inline-metric">
+                    <span>{common.active}</span>
+                    <strong>{courses.filter((course) => course.is_active !== false).length}</strong>
+                  </article>
+                </div>
+
+                <button type="button" className="btn btn-secondary" onClick={handleStartCourseCreate}>
+                  <HiFolderPlus /> {t.courseManagement.newCourse}
+                </button>
+              </>
+            )}
+          </div>
+
+          {!builderCourse ? (
+            <div className="admin-course-shell">
+              <section className="admin-course-editor-panel">
+                <div className="admin-course-panel-heading">
+                  <div>
+                    <span>{courseForm.id ? t.courseManagement.edit : t.courseManagement.newCourse}</span>
+                    <strong>{courseForm.course_name || t.courseManagement.formIntro}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-course-form-grid">
+                  <label className="admin-installer-panel__label">
+                    {t.courseManagement.codeLabel}
+                    <input
+                      type="text"
+                      className="admin-installer-panel__input"
+                      placeholder={t.courseManagement.codePlaceholder}
+                      value={courseForm.course_code}
+                      onChange={(event) => handleCourseFieldChange('course_code', event.target.value)}
+                    />
+                  </label>
+
+                  <label className="admin-installer-panel__label">
+                    {t.courseManagement.nameLabel}
+                    <input
+                      type="text"
+                      className="admin-installer-panel__input"
+                      placeholder={t.courseManagement.namePlaceholder}
+                      value={courseForm.course_name}
+                      onChange={(event) => handleCourseFieldChange('course_name', event.target.value)}
+                    />
+                  </label>
+
+                  <label className="admin-installer-panel__label">
+                    {t.courseManagement.subjectLabel}
+                    <input
+                      type="text"
+                      className="admin-installer-panel__input"
+                      placeholder={t.courseManagement.subjectPlaceholder}
+                      value={courseForm.subject}
+                      onChange={(event) => handleCourseFieldChange('subject', event.target.value)}
+                    />
+                  </label>
+
+                  {isEditingAnalyticsCourse ? (
+                    <label className="admin-installer-panel__label">
+                      {t.courseManagement.instructorLabel}
+                      <input
+                        type="text"
+                        className="admin-installer-panel__input"
+                        placeholder={t.courseManagement.instructorPlaceholder}
+                        value={courseForm.instructor_name}
+                        onChange={(event) => handleCourseFieldChange('instructor_name', event.target.value)}
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <label className="admin-installer-panel__label">
+                        {t.courseManagement.testQuestionsLabel}
+                        <input
+                          type="number"
+                          min="0"
+                          className="admin-installer-panel__input"
+                          value={courseForm.course_test_questions}
+                          onChange={(event) => handleCourseFieldChange('course_test_questions', event.target.value)}
+                        />
+                      </label>
+
+                      <label className="admin-installer-panel__label">
+                        {t.courseManagement.pointsLabel}
+                        <input
+                          type="number"
+                          min="0"
+                          className="admin-installer-panel__input"
+                          value={courseForm.points}
+                          onChange={(event) => handleCourseFieldChange('points', event.target.value)}
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                <label className="admin-installer-panel__label">
+                  {t.courseManagement.descriptionLabel}
+                  <textarea
+                    className="admin-testimonial-form__textarea admin-course-form__textarea"
+                    placeholder={t.courseManagement.descriptionPlaceholder}
+                    value={courseForm.description}
+                    onChange={(event) => handleCourseFieldChange('description', event.target.value)}
+                    disabled={isEditingAnalyticsCourse}
+                  />
+                </label>
+
+                {!isEditingAnalyticsCourse ? (
+                  <label className="admin-course-form__toggle">
+                    <input
+                      type="checkbox"
+                      checked={courseForm.is_active}
+                      onChange={(event) => handleCourseFieldChange('is_active', event.target.checked)}
+                    />
+                    <span>{t.courseManagement.activeLabel}</span>
+                  </label>
+                ) : null}
+
+                <div className="admin-installer-panel__actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleSaveCourse}
+                    disabled={savingCourseId === activeCourseSaveId || !courseForm.course_code.trim() || !courseForm.course_name.trim() || !courseForm.subject.trim()}
+                  >
+                    {courseForm.id ? <HiPencilSquare /> : <HiFolderPlus />}
+                    {savingCourseId === activeCourseSaveId
+                      ? t.courseManagement.saving
+                      : courseForm.id ? t.courseManagement.save : t.courseManagement.create}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={resetCourseForm}>
+                    {courseForm.id ? t.courseManagement.cancelEdit : t.courseManagement.clear}
+                  </button>
+                </div>
+
+                {courseMessage ? (
+                  <p className="admin-installer-panel__status admin-installer-panel__status--message">{courseMessage}</p>
+                ) : null}
+              </section>
+
+              <section className="admin-course-catalog">
+                {courses.length ? courses.map((course) => {
+                  const instructorName = typeof course.instructor === 'object'
+                    ? course.instructor?.name
+                    : null
+                  const isEditing = courseForm.id === course._id
+
+                  return (
+                    <article key={course._id} className={`admin-course-row ${isEditing ? 'admin-course-row--active' : ''}`}>
+                      <div className="admin-course-row__icon">
+                        <HiBookOpen />
+                      </div>
+                      <div className="admin-course-row__content">
+                        <div className="admin-course-row__title">
+                          <strong>{course.course_name}</strong>
+                          <span>{course.course_code || common.notAvailable}</span>
+                        </div>
+                        <p>{course.description || t.courseManagement.noDescription}</p>
+                        <div className="admin-course-row__meta">
+                          <span>{course.subject || common.notAvailable}</span>
+                          <span>{instructorName || t.courseManagement.unknownInstructor}</span>
+                          <span>{course.is_active === false ? t.courseManagement.inactiveLabel : common.active}</span>
+                          {course.is_analytics_course ? <span>{t.courseManagement.analyticsSource}</span> : null}
+                        </div>
+                      </div>
+                      <div className="admin-course-row__actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary admin-course-row__action"
+                          onClick={() => handleEditCourse(course)}
+                        >
+                          <HiPencilSquare /> {t.courseManagement.edit}
+                        </button>
+                        {!course.is_analytics_course ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary admin-course-row__action"
+                            onClick={() => handleOpenCourseBuilder(course)}
+                          >
+                            <HiBookOpen /> {t.courseManagement.openBuilder}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  )
+                }) : (
+                  <p className="empty-state">{t.courseManagement.empty}</p>
+                )}
+              </section>
+            </div>
+          ) : (
+            <section className="admin-course-builder admin-course-builder--focused">
+              <div className="admin-course-builder__layout">
+                <div className="admin-course-builder__modules">
+                  {builderLoadingModules ? (
+                    <p className="empty-state">{common.loading}</p>
+                  ) : builderModules.length ? builderModules.map((module, index) => {
+                    const isSelected = builderSelectedModule?._id === module._id
+                    const taskCount = module.task_count ?? module.total_tasks ?? 0
+
+                    return (
+                      <article key={module._id} className={`admin-builder-module ${isSelected ? 'admin-builder-module--active' : ''}`}>
+                        <div className="admin-builder-module__main" onClick={() => handleBuilderModuleSelect(module)}>
+                          <span className="admin-builder-module__order">{index + 1}</span>
+                          <div>
+                            <strong>{module.module_name}</strong>
+                            <p>{module.description || t.courseManagement.noDescription}</p>
+                            <span>{translate('dashboard.teacher.modules.tasksCount', { count: taskCount })}</span>
+                          </div>
+                        </div>
+                        <div className="admin-course-row__actions">
+                          <button type="button" className="btn-icon" onClick={() => openBuilderModuleForm(module)} title={t.courseManagement.editModule}>
+                            <HiPencilSquare />
+                          </button>
+                          <button type="button" className="btn-icon delete-btn" onClick={() => handleBuilderDeleteModule(module._id)} title={t.courseManagement.deleteModule}>
+                            <HiTrash />
+                          </button>
+                        </div>
+                      </article>
+                    )
+                  }) : (
+                    <p className="empty-state">{t.courseManagement.noModules}</p>
+                  )}
+                </div>
+
+                <div className="admin-course-builder__tasks">
+                  <div className="admin-course-builder__task-header">
+                    <div>
+                      <h4>{builderSelectedModule ? builderSelectedModule.module_name : t.courseManagement.selectModuleTitle}</h4>
+                      <p>{builderSelectedModule ? t.courseManagement.tasksDescription : t.courseManagement.selectModuleHint}</p>
+                    </div>
+                    {builderSelectedModule ? (
+                      <button type="button" className="btn btn-primary" onClick={() => openBuilderTaskForm()}>
+                        <HiFolderPlus /> {t.courseManagement.addTask}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {builderLoadingTasks ? (
+                    <p className="empty-state">{common.loading}</p>
+                  ) : builderSelectedModule ? (
+                    builderTasks.length ? builderTasks.map((task) => (
+                      <article key={task._id} className="admin-builder-task">
+                        <div className="admin-builder-task__icon">
+                          <HiListBullet />
+                        </div>
+                        <div className="admin-builder-task__content">
+                          <strong>{task.task_name}</strong>
+                          <p>{task.problem_statement || t.courseManagement.noDescription}</p>
+                          <div className="admin-course-row__meta">
+                            <span>{task.language || common.general}</span>
+                            <span>{task.difficulty || common.notAvailable}</span>
+                            <span>{translate('dashboard.student.pointShop.cost', { points: task.points || 0 })}</span>
+                          </div>
+                        </div>
+                        <div className="admin-course-row__actions">
+                          <button type="button" className="btn-icon" onClick={() => openBuilderTaskForm(task)} title={t.courseManagement.editTask}>
+                            <HiPencilSquare />
+                          </button>
+                          <button type="button" className="btn-icon delete-btn" onClick={() => handleBuilderDeleteTask(task._id)} title={t.courseManagement.deleteTask}>
+                            <HiTrash />
+                          </button>
+                        </div>
+                      </article>
+                    )) : (
+                      <p className="empty-state">{t.courseManagement.noTasks}</p>
+                    )
+                  ) : (
+                    <p className="empty-state">{t.courseManagement.selectModuleHint}</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
         </motion.div>
       )}
 
@@ -609,7 +764,7 @@ function AdminDashboardWorkspace({
                     onChange={(event) => handleAnnouncementFieldChange('courseId', event.target.value)}
                   >
                     <option value="">{t.announcements.selectCourse}</option>
-                    {courses.map((course) => (
+                    {courses.filter((course) => !course.is_analytics_course).map((course) => (
                       <option key={course._id} value={course._id}>
                         {course.course_name}
                       </option>

@@ -339,6 +339,60 @@ async function findAnalyticsCourseByCode(courseCode) {
     return analyticsDb.collection(COURSE_ANALYTICS_COLLECTION).findOne({ courseCode: exactRegex(courseCode) });
 }
 
+async function countAnalyticsCoursesExcludingCodes(courseCodes = []) {
+    const analyticsDb = getAnalyticsDb();
+    if (!analyticsDb) return 0;
+
+    const existingCodes = new Set(courseCodes.map(normalizeCourseCode).filter(Boolean));
+    const docs = await analyticsDb
+        .collection(COURSE_ANALYTICS_COLLECTION)
+        .find({}, { projection: { courseCode: 1, courseId: 1 } })
+        .toArray();
+
+    return docs.filter((doc) => {
+        const courseCode = normalizeCourseCode(doc.courseCode || doc.courseId);
+        return courseCode && !existingCodes.has(courseCode);
+    }).length;
+}
+
+async function updateAnalyticsCourseMetadata(courseId, updates = {}) {
+    const analyticsDb = getAnalyticsDb();
+    if (!analyticsDb || !courseId) return null;
+
+    const set = {};
+    if (updates.course_code !== undefined) set.courseCode = normalizeCourseCode(updates.course_code);
+    if (updates.course_name !== undefined) set.courseName = normalizeText(updates.course_name);
+    if (updates.subject !== undefined) set.subject = normalizeText(updates.subject);
+    if (updates.instructor_name !== undefined) set.instructorName = normalizeText(updates.instructor_name);
+
+    Object.keys(set).forEach((key) => {
+        if (!set[key]) delete set[key];
+    });
+
+    if (!Object.keys(set).length) {
+        return findAnalyticsCourseById(courseId);
+    }
+
+    const query = [{ courseId: String(courseId) }];
+    const numericCourseId = Number(courseId);
+    if (Number.isFinite(numericCourseId)) {
+        query.push({ courseId: numericCourseId });
+    }
+
+    const result = await analyticsDb.collection(COURSE_ANALYTICS_COLLECTION).findOneAndUpdate(
+        { $or: query },
+        { $set: set },
+        { returnDocument: 'after' }
+    );
+
+    if (!result) return null;
+    if (Object.prototype.hasOwnProperty.call(result, 'value')) {
+        return result.value;
+    }
+
+    return result;
+}
+
 async function listAnalyticsCoursesForUser(user, options = {}) {
     const { includeAllForStudent = false, courseCodes = [] } = options;
     const analyticsDb = getAnalyticsDb();
@@ -347,10 +401,12 @@ async function listAnalyticsCoursesForUser(user, options = {}) {
     const role = String(user.role || '').toUpperCase();
     let query = {};
 
-    if (role === 'STUDENT' && !includeAllForStudent) {
-        const email = normalizeEmail(user.email);
-        if (!email) return [];
-        query = { 'students.email': exactRegex(email) };
+    if (role === 'STUDENT') {
+        if (!includeAllForStudent) {
+            const email = normalizeEmail(user.email);
+            if (!email) return [];
+            query = { 'students.email': exactRegex(email) };
+        }
     } else if (role !== 'ADMIN') {
         const filters = [];
         const instructorName = normalizeText(user.name);
@@ -516,6 +572,7 @@ module.exports = {
     ANALYTICS_COURSE_ID_PREFIX,
     buildAnalyticsTeacherStatsForUser,
     buildCourseAnalyticsResponseFromDocument,
+    countAnalyticsCoursesExcludingCodes,
     createAnalyticsCourseId,
     findAnalyticsCourseByCode,
     findAnalyticsCourseById,
@@ -524,4 +581,5 @@ module.exports = {
     listAnalyticsEnrollmentsForStudent,
     mapAnalyticsCourseSummary,
     parseAnalyticsCourseId,
+    updateAnalyticsCourseMetadata,
 };

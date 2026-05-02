@@ -19,6 +19,7 @@ const {
     listAnalyticsCoursesForUser,
     mapAnalyticsCourseSummary,
     parseAnalyticsCourseId,
+    updateAnalyticsCourseMetadata,
 } = require('../services/analyticsCourseService');
 const { ensureDir, removeFileIfPresent } = require('../utils/fileSystem');
 const { parsePagination, applyPaginationHeaders } = require('../utils/pagination');
@@ -137,6 +138,49 @@ const createCourse = async (req, res) => {
 // @access  Private (Instructor/Admin)
 const updateCourse = async (req, res) => {
     try {
+        if (isAnalyticsCourseId(req.params.id)) {
+            if (!isAdminRole(req.user.role)) {
+                return res.status(401).json({ message: 'Not authorized' });
+            }
+
+            const analyticsCourseId = parseAnalyticsCourseId(req.params.id);
+            const existingAnalyticsCourse = await findAnalyticsCourseById(analyticsCourseId);
+            if (!existingAnalyticsCourse) {
+                return res.status(404).json({ message: 'Course not found' });
+            }
+
+            const {
+                course_code,
+                course_name,
+                subject,
+                instructor_name,
+            } = req.body;
+
+            if (course_code && course_code.toUpperCase() !== String(existingAnalyticsCourse.courseCode || '').toUpperCase()) {
+                const [existingAppCourse, existingAnalyticsCodeCourse] = await Promise.all([
+                    Course.findOne({ course_code: course_code.toUpperCase() }),
+                    findAnalyticsCourseByCode(course_code),
+                ]);
+
+                if (existingAppCourse || (existingAnalyticsCodeCourse && String(existingAnalyticsCodeCourse.courseId) !== String(existingAnalyticsCourse.courseId))) {
+                    return res.status(400).json({ message: 'Course code already exists' });
+                }
+            }
+
+            const updatedAnalyticsCourse = await updateAnalyticsCourseMetadata(analyticsCourseId, {
+                course_code,
+                course_name,
+                subject,
+                instructor_name,
+            });
+
+            if (!updatedAnalyticsCourse) {
+                return res.status(404).json({ message: 'Course not found' });
+            }
+
+            return res.json(mapAnalyticsCourseSummary(updatedAnalyticsCourse));
+        }
+
         const access = await verifyCourseAccess(req.params.id, req.user);
         if (access.error) {
             return res.status(access.error.status).json({ message: access.error.message });
@@ -490,8 +534,7 @@ const getCourses = async (req, res) => {
         const analyticsCourses = (await listAnalyticsCoursesForUser(req.user, {
             includeAllForStudent: true,
             courseCodes: coursesWithModuleCounts.map((course) => course.course_code),
-        }))
-            .filter((course) => !existingCourseCodes.has(String(course.course_code || '').toUpperCase()));
+        })).filter((course) => !existingCourseCodes.has(String(course.course_code || '').toUpperCase()));
         const allCourses = [...analyticsCourses, ...coursesWithModuleCounts];
 
         applyPaginationHeaders(res, { ...pagination, total: total + analyticsCourses.length });
