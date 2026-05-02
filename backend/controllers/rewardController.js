@@ -3,6 +3,8 @@ const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
 const { parsePagination, applyPaginationHeaders } = require('../utils/pagination');
 
+const isAdminRole = (role) => String(role || '').toUpperCase() === 'ADMIN';
+
 // @desc    Create a new reward
 // @route   POST /api/rewards
 // @access  Private (Teacher)
@@ -19,7 +21,7 @@ const createReward = async (req, res) => {
             return res.status(404).json({ message: 'Course not found' });
         }
 
-        if (course.instructor.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        if (course.instructor.toString() !== req.user._id.toString() && !isAdminRole(req.user.role)) {
             return res.status(401).json({ message: 'Not authorized to add rewards for this course' });
         }
 
@@ -114,7 +116,7 @@ const deleteReward = async (req, res) => {
             return res.status(404).json({ message: 'Reward not found' });
         }
 
-        if (reward.createdBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        if (reward.createdBy.toString() !== req.user._id.toString() && !isAdminRole(req.user.role)) {
             return res.status(401).json({ message: 'Not authorized' });
         }
 

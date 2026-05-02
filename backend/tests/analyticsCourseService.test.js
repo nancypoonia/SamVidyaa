@@ -1,12 +1,66 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const User = require('../models/User');
 
 const {
     buildCourseAnalyticsResponseFromDocument,
     createAnalyticsCourseId,
     isAnalyticsCourseId,
+    listAnalyticsCoursesForUser,
     parseAnalyticsCourseId,
 } = require('../services/analyticsCourseService');
+
+function stubAnalyticsCourses(t, docs) {
+    const originalDb = Object.getOwnPropertyDescriptor(User, 'db');
+    let capturedQuery;
+
+    Object.defineProperty(User, 'db', {
+        configurable: true,
+        value: {
+            readyState: 1,
+            client: {
+                db() {
+                    return {
+                        collection() {
+                            return {
+                                find(query) {
+                                    capturedQuery = query;
+                                    return {
+                                        project() {
+                                            return this;
+                                        },
+                                        sort() {
+                                            return this;
+                                        },
+                                        async toArray() {
+                                            return docs.filter((doc) => {
+                                                if (!query || !Object.keys(query).length) return true;
+                                                if (query['students.email']) {
+                                                    return doc.students?.some((student) => query['students.email'].test(student.email));
+                                                }
+                                                return true;
+                                            });
+                                        },
+                                    };
+                                },
+                            };
+                        },
+                    };
+                },
+            },
+        },
+    });
+
+    t.after(() => {
+        if (originalDb) {
+            Object.defineProperty(User, 'db', originalDb);
+        } else {
+            delete User.db;
+        }
+    });
+
+    return () => capturedQuery;
+}
 
 test('analytics course ids round-trip safely', () => {
     const id = createAnalyticsCourseId('PY 101');
@@ -68,4 +122,29 @@ test('buildCourseAnalyticsResponseFromDocument maps analytics schema for dashboa
     assert.equal(analytics.moduleAnalytics[0].moduleName, 'Intro');
     assert.equal(analytics.taskDifficultyHotspots[0].passRate, 50);
     assert.equal(analytics.studentAnalytics[0].progressBand, 'completed');
+});
+
+test('listAnalyticsCoursesForUser scopes student analytics courses by email', async (t) => {
+    const getQuery = stubAnalyticsCourses(t, [
+        {
+            courseId: 101,
+            courseCode: 'PY101',
+            courseName: 'Python Basics',
+            students: [{ email: 'asha@example.com' }],
+        },
+        {
+            courseId: 102,
+            courseCode: 'JS101',
+            courseName: 'JavaScript Basics',
+            students: [{ email: 'other@example.com' }],
+        },
+    ]);
+
+    const courses = await listAnalyticsCoursesForUser({
+        role: 'STUDENT',
+        email: 'Asha@Example.com',
+    });
+
+    assert.equal(getQuery()['students.email'].test('asha@example.com'), true);
+    assert.deepEqual(courses.map((course) => course.course_code), ['PY101']);
 });

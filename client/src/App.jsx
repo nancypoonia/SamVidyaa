@@ -24,18 +24,7 @@ function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/" replace />
   }
 
-  // Debug logging
-  console.log("ProtectedRoute Check:", {
-    path: window.location.pathname,
-    isAuthenticated,
-    loading,
-    userRole: user?.role,
-    allowedRoles,
-    hasAccess: allowedRoles ? allowedRoles.includes(user?.role) : true
-  });
-
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
-    console.warn("ProtectedRoute: Access denied. User role:", user?.role, "Allowed:", allowedRoles);
     return <Navigate to="/" replace />
   }
 

@@ -14,8 +14,6 @@ const registerUser = async (req, res) => {
     try {
         const { name, email, password, institution, enrollment_number, username } = req.body;
 
-        console.log("Registering public student:", { name, email });
-
         // Removed email restriction for general testing
         // if (!email.endsWith('@bmu.edu.in')) {
         //     return res.status(400).json({ message: 'Only @bmu.edu.in emails are allowed' });

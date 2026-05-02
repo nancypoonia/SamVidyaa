@@ -4,13 +4,67 @@ const assert = require('node:assert/strict');
 const rewardController = require('../controllers/rewardController');
 const Reward = require('../models/Reward');
 const Enrollment = require('../models/Enrollment');
+const Course = require('../models/Course');
 
 const {
     createMockResponse,
     stubMethod,
     createQueryChain,
+    createAwaitableQuery,
     createSelectLeanQuery,
 } = require('./testUtils');
+
+test('createReward allows uppercase admin users on any course', async (t) => {
+    let createdPayload = null;
+
+    stubMethod(t, Course, 'findById', () => createAwaitableQuery({
+        _id: 'course-1',
+        instructor: { toString: () => 'teacher-1' },
+    }));
+    stubMethod(t, Reward, 'create', async (payload) => {
+        createdPayload = payload;
+        return { _id: 'reward-1', ...payload };
+    });
+
+    const req = {
+        user: { _id: 'admin-1', role: 'ADMIN' },
+        body: {
+            course_id: 'course-1',
+            name: 'Badge',
+            description: 'Well done',
+            cost: 10,
+        },
+    };
+    const res = createMockResponse();
+
+    await rewardController.createReward(req, res);
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(createdPayload.createdBy, 'admin-1');
+});
+
+test('deleteReward allows uppercase admin users', async (t) => {
+    let deleted = false;
+
+    stubMethod(t, Reward, 'findById', () => createAwaitableQuery({
+        _id: 'reward-1',
+        createdBy: { toString: () => 'teacher-1' },
+        async deleteOne() {
+            deleted = true;
+        },
+    }));
+
+    const req = {
+        user: { _id: 'admin-1', role: 'ADMIN' },
+        params: { id: 'reward-1' },
+    };
+    const res = createMockResponse();
+
+    await rewardController.deleteReward(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(deleted, true);
+});
 
 test('getStudentRewards returns empty list when student has no qualifying enrollments', async (t) => {
     let rewardFindCalled = false;

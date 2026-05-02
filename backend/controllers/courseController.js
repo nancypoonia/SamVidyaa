@@ -532,7 +532,6 @@ const getCourses = async (req, res) => {
         });
         const existingCourseCodes = new Set(coursesWithModuleCounts.map((course) => String(course.course_code || '').toUpperCase()));
         const analyticsCourses = (await listAnalyticsCoursesForUser(req.user, {
-            includeAllForStudent: true,
             courseCodes: coursesWithModuleCounts.map((course) => course.course_code),
         })).filter((course) => !existingCourseCodes.has(String(course.course_code || '').toUpperCase()));
         const allCourses = [...analyticsCourses, ...coursesWithModuleCounts];
